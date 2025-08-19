@@ -112,6 +112,7 @@ const ProductList = () => {
         setSearchQuery("");
         setSelectedCategory("all");
         setSortBy(defaultSort);
+        setSelectedSupplier(null);
         setMin(null);
         setMax(null);
         filterProducts("all", "", defaultSort, null, null);

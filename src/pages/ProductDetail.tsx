@@ -8,12 +8,20 @@ import { addToCart } from "../data/cart";
 import QuoteModal from "../components/QuoteModal";
 import { getUnitPriceForQty } from "../data/pricing";
 
+function Spinner() {
+    return <span className="spinner" aria-hidden />;
+}
+
 const ProductDetail = () => {
     const { id } = useParams<{ id: string }>();
     const [product, setProduct] = useState<Product | null>(null);
     const [selectedColor, setSelectedColor] = useState<string>("");
     const [selectedSize, setSelectedSize] = useState<string>("");
     const [quantity, setQuantity] = useState<number>(1);
+
+    // Loading flags for buttons
+    const [adding, setAdding] = useState(false);
+    const [quoting, setQuoting] = useState(false);
 
     // Quote modal state (controlled)
     const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -78,6 +86,39 @@ const ProductDetail = () => {
         setQuoteUnitPrice(ctx.unitPrice);
         setQuoteNetSubtotal(ctx.netSubtotal);
         setIsOpen(true);
+    };
+    const handleOpenQuote = async () => {
+        if (quoting) return;
+        try {
+            setQuoting(true);
+            // Optional: tiny delay para ver el spinner
+            await new Promise((r) => setTimeout(r, 200));
+            openQuoteFromDetail();
+        } finally {
+            setQuoting(false);
+        }
+    };
+    // Handlers con spinner
+    const handleAddToCart = async () => {
+        if (!canAddToCart || adding) return;
+        try {
+            setAdding(true);
+            addToCart({
+                id: product.id,
+                name: product.name,
+                sku: product.sku,
+                price: getUnitPriceForQty(product, quantity),
+                qty: quantity,
+                color: selectedColor,
+                size: selectedSize,
+            });
+            // Optional: tiny delay so el spinner se vea (UX)
+            await new Promise((r) => setTimeout(r, 350));
+            // Optional: abrir el aside del carrito
+            // window.dispatchEvent(new Event("cart:open"));
+        } finally {
+            setAdding(false);
+        }
     };
 
     return (
@@ -217,31 +258,35 @@ const ProductDetail = () => {
                             <div className="action-buttons">
                                 <button
                                     className={`btn btn-primary cta1 ${!canAddToCart ? "disabled" : ""}`}
-                                    disabled={!canAddToCart}
-                                    onClick={() => {
-                                        if (canAddToCart) {
-                                            addToCart({
-                                                id: product.id,
-                                                name: product.name,
-                                                sku: product.sku,
-                                                price: getUnitPriceForQty(product, quantity),
-                                                qty: quantity,
-                                                color: selectedColor,
-                                                size: selectedSize,
-                                            });
-                                        }
-                                    }}
+                                    disabled={!canAddToCart || adding}
+                                    onClick={handleAddToCart}
+                                    aria-busy={adding}
+                                    aria-live="polite"
                                 >
-                                    <span className="material-icons">shopping_cart</span>
-                                    {canAddToCart ? "Agregar al carrito" : "No disponible"}
+                                    {adding ? (
+                                        <Spinner />
+                                    ) : (
+                                        <>
+                                            <span className="material-icons">shopping_cart</span>
+                                            Agregar al carrito
+                                        </>
+                                    )}
                                 </button>
 
                                 <button
                                     className="btn btn-secondary cta1"
-                                    onClick={openQuoteFromDetail} // open modal from Product Detail
+                                    onClick={handleOpenQuote} // open modal from Product Detail
+                                    disabled={quoting}
+                                    aria-busy={quoting}
                                 >
-                                    <span className="material-icons">calculate</span>
-                                    Solicitar cotización
+                                    {quoting ? (
+                                        <Spinner />
+                                    ) : (
+                                        <>
+                                            <span className="material-icons">calculate</span>
+                                            Solicitar cotización
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
