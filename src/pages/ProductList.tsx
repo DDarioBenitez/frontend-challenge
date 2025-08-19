@@ -8,16 +8,33 @@ import "./ProductList.css";
 const ProductList = () => {
     const [filteredProducts, setFilteredProducts] = useState<Product[]>(allProducts);
     const [selectedCategory, setSelectedCategory] = useState("all");
+    const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState("name");
+    const [min, setMin] = useState<number | null>(null);
+    const [max, setMax] = useState<number | null>(null);
+
+    // Helper: minimal unit price (base or best break)
+    const productMinUnitPrice = (p: Product) => {
+        let m = p.basePrice;
+        if (p.priceBreaks && p.priceBreaks.length) {
+            for (const b of p.priceBreaks) if (b.price < m) m = b.price;
+        }
+        return m;
+    };
 
     // Filter and sort products based on criteria
-    const filterProducts = (category: string, search: string, sort: string) => {
+    const filterProducts = (category: string, search: string, sort: string, minPrice: number | null, maxPrice: number | null) => {
         let filtered = [...allProducts];
 
         // Category filter
         if (category !== "all") {
             filtered = filtered.filter((product) => product.category === category);
+        }
+
+        // Supplier filter
+        if (selectedSupplier) {
+            filtered = filtered.filter((product) => product.supplier === selectedSupplier);
         }
 
         // Search filter
@@ -27,13 +44,24 @@ const ProductList = () => {
             );
         }
 
+        // Price range filter
+        if (minPrice !== null || maxPrice !== null) {
+            filtered = filtered.filter((product) => {
+                const unitPrice = productMinUnitPrice(product);
+                return (minPrice === null || unitPrice >= minPrice) && (maxPrice === null || unitPrice <= maxPrice);
+            });
+        }
+
         // Sorting logic
         switch (sort) {
             case "name":
                 filtered.sort((a, b) => a.name.localeCompare(b.name));
                 break;
-            case "price":
-                filtered.sort((a, b) => a.basePrice - b.basePrice);
+            case "+price":
+                filtered.sort((a, b) => productMinUnitPrice(b) - productMinUnitPrice(a));
+                break;
+            case "-price":
+                filtered.sort((a, b) => productMinUnitPrice(a) - productMinUnitPrice(b));
                 break;
             case "stock":
                 filtered.sort((a, b) => b.stock - a.stock);
@@ -47,19 +75,41 @@ const ProductList = () => {
 
     const handleCategoryChange = (category: string) => {
         setSelectedCategory(category);
-        filterProducts(category, searchQuery, sortBy);
+        filterProducts(category, searchQuery, sortBy, min, max);
     };
 
     const handleSearchChange = (search: string) => {
         setSearchQuery(search);
-        filterProducts(selectedCategory, search, sortBy);
+        filterProducts(selectedCategory, search, sortBy, min, max);
     };
 
     const handleSortChange = (sort: string) => {
         setSortBy(sort);
-        filterProducts(selectedCategory, searchQuery, sort);
+        filterProducts(selectedCategory, searchQuery, sort, min, max);
     };
 
+    const handleSupplierChange = (supplier: string) => {
+        setSelectedSupplier(supplier);
+        filterProducts(selectedCategory, searchQuery, supplier, min, max);
+    };
+
+    // price range change
+    const handlePriceRangeChange = (minVal: number | null, maxVal: number | null) => {
+        setMin(minVal);
+        setMax(maxVal);
+        filterProducts(selectedCategory, searchQuery, sortBy, minVal, maxVal);
+    };
+
+    // clear all filters
+    const handleClearFilters = () => {
+        const defaultSort = "name";
+        setSearchQuery("");
+        setSelectedCategory("all");
+        setSortBy(defaultSort);
+        setMin(null);
+        setMax(null);
+        filterProducts("all", "", defaultSort, null, null);
+    };
     return (
         <div className="product-list-page">
             <div className="container">
@@ -90,6 +140,11 @@ const ProductList = () => {
                     onCategoryChange={handleCategoryChange}
                     onSearchChange={handleSearchChange}
                     onSortChange={handleSortChange}
+                    onSupplierChange={handleSupplierChange}
+                    onPriceRangeChange={handlePriceRangeChange}
+                    onClearFilters={handleClearFilters}
+                    priceMin={min}
+                    priceMax={max}
                 />
 
                 {/* Products Grid */}
@@ -102,9 +157,7 @@ const ProductList = () => {
                             <button
                                 className="btn btn-primary cta1"
                                 onClick={() => {
-                                    setSearchQuery("");
-                                    setSelectedCategory("all");
-                                    filterProducts("all", "", sortBy);
+                                    handleClearFilters();
                                 }}
                             >
                                 Ver todos los productos

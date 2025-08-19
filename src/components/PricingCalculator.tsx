@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Product } from "../types/Product";
 import "./PricingCalculator.css";
+import { addToCart } from "../data/cart";
 
 interface PricingCalculatorProps {
     product: Product;
@@ -167,8 +168,14 @@ const PricingCalculator = ({ product }: PricingCalculatorProps) => {
                     <button
                         className="btn btn-primary cta1"
                         onClick={() => {
-                            // Add to cart functionality
-                            alert("Función de agregar al carrito por implementar");
+                            addToCart({
+                                id: product.id,
+                                name: product.name,
+                                image: product.image,
+                                price: currentPrice,
+                                sku: product.sku,
+                                qty: quantity,
+                            });
                         }}
                     >
                         <span className="material-icons">shopping_cart</span>

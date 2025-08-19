@@ -4,6 +4,7 @@ import { products } from "../data/products";
 import { Product } from "../types/Product";
 import PricingCalculator from "../components/PricingCalculator";
 import "./ProductDetail.css";
+import { addToCart } from "../data/cart";
 
 const ProductDetail = () => {
     const { id } = useParams<{ id: string }>();
@@ -46,6 +47,38 @@ const ProductDetail = () => {
 
     // Validate product status
     const canAddToCart = product.status === "active" && product.stock > 0;
+
+    // Sort price breaks
+    const sortBreaks = (product: Product) => {
+        if (!product.priceBreaks || product.priceBreaks.length === 0) return [];
+        return [...product.priceBreaks].sort((a, b) => a.minQty - b.minQty);
+    };
+
+    // Get best price break for quantity
+    const getBestBreakForQty = (product: Product, qty: number) => {
+        const sorted = sortBreaks(product);
+        if (sorted.length === 0) return { index: -1, priceBreak: null as any };
+
+        const eligible = sorted.map((b, i) => ({ ...b, __index: i })).filter((b) => qty >= b.minQty);
+
+        if (eligible.length === 0) return { index: -1, priceBreak: null as any };
+
+        const best = eligible.reduce((best, curr) => {
+            if (!best) return curr;
+            if (curr.price < best.price) return curr;
+            if (curr.price === best.price && curr.minQty > best.minQty) return curr;
+            return best;
+        }, null as any);
+
+        return { index: best.__index, priceBreak: best };
+    };
+
+    // Get unit price for quantity
+    const getUnitPriceForQty = (product: Product, qty: number) => {
+        const { priceBreak } = getBestBreakForQty(product, qty);
+        // guard-rail: nunca peor que basePrice
+        return priceBreak ? Math.min(priceBreak.price, product.basePrice) : product.basePrice;
+    };
 
     return (
         <div className="product-detail-page">
@@ -185,7 +218,19 @@ const ProductDetail = () => {
                                 <button
                                     className={`btn btn-primary cta1 ${!canAddToCart ? "disabled" : ""}`}
                                     disabled={!canAddToCart}
-                                    onClick={() => alert("Función de agregar al carrito por implementar")}
+                                    onClick={() => {
+                                        if (canAddToCart) {
+                                            addToCart({
+                                                id: product.id,
+                                                name: product.name,
+                                                sku: product.sku,
+                                                price: getUnitPriceForQty(product, quantity),
+                                                qty: quantity,
+                                                color: selectedColor,
+                                                size: selectedSize,
+                                            });
+                                        }
+                                    }}
                                 >
                                     <span className="material-icons">shopping_cart</span>
                                     {canAddToCart ? "Agregar al carrito" : "No disponible"}
