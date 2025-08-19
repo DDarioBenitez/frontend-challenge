@@ -2,72 +2,38 @@ import { useEffect, useMemo, useState } from "react";
 import { Product } from "../types/Product";
 import "./PricingCalculator.css";
 import { addToCart } from "../data/cart";
+import { sortBreaks, getBestBreakForQty, computePricing } from "../data/pricing";
 
 interface PricingCalculatorProps {
     product: Product;
+    onOpenQuote?: (ctx: { product: Product; quantity: number; unitPrice: number; netSubtotal: number; discountPercent: number }) => void;
 }
 
-const PricingCalculator = ({ product }: PricingCalculatorProps) => {
+const PricingCalculator = ({ product, onOpenQuote }: PricingCalculatorProps) => {
     const [quantity, setQuantity] = useState<number>(1);
     const [selectedBreak, setSelectedBreak] = useState<number>(0);
 
     // Sort price breaks by minimum quantity
-    const sortedBreaks = useMemo(() => {
-        if (!product.priceBreaks || product.priceBreaks.length === 0) return [];
-        return [...product.priceBreaks].sort((a, b) => a.minQty - b.minQty);
-    }, [product.priceBreaks]);
+    const sortedBreaksMemo = useMemo(() => sortBreaks(product), [product]);
 
-    // Get best price break for quantity
-    const getBestBreakForQty = (qty: number) => {
-        if (sortedBreaks.length === 0) return { index: -1, priceBreak: null as any };
+    // Update selected price break (match by minQty & price to get index)
+    useEffect(() => {
+        const best = getBestBreakForQty(product, quantity);
+        if (!best) {
+            setSelectedBreak(-1);
+            return;
+        }
+        const idx = sortedBreaksMemo.findIndex((b) => b.minQty === best.minQty && b.price === best.price);
+        setSelectedBreak(idx);
+    }, [product, quantity, sortedBreaksMemo]);
 
-        const eligible = sortedBreaks.map((b, i) => ({ ...b, __index: i })).filter((b) => qty >= b.minQty);
-
-        if (eligible.length === 0) return { index: -1, priceBreak: null as any };
-
-        // Find best price
-        const best = eligible.reduce((best, curr) => {
-            if (best == null) return curr;
-            if (curr.price < best.price) return curr;
-            if (curr.price === best.price && curr.minQty > best.minQty) return curr;
-            return best;
-        }, null as any);
-
-        return { index: best.__index, priceBreak: best };
-    };
-
-    // Calculate best pricing for quantity
-    const calculatePrice = (qty: number) => {
-        if (!sortedBreaks.length) return product.basePrice * qty;
-        const { priceBreak } = getBestBreakForQty(qty);
-        const unit = priceBreak
-            ? Math.min(priceBreak.price, product.basePrice) // Use best price
-            : product.basePrice;
-        return unit * qty;
-    };
-
-    // Calculate discount amount
-    const getDiscount = (qty: number) => {
-        const baseTotal = product.basePrice * qty;
-        if (baseTotal <= 0) return 0;
-        const discountedTotal = calculatePrice(qty);
-        return ((baseTotal - discountedTotal) / baseTotal) * 100;
-    };
+    // Pricing snapshot (unit, subtotal neto, % descuento)
+    const { unitPrice, netSubtotal, discountPercent } = useMemo(() => computePricing(product, quantity), [product, quantity]);
 
     // Format price display
     const formatPrice = (price: number) => {
         return Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", minimumFractionDigits: 0 }).format(price); // Should be CLP formatting
     };
-
-    // Update selected price break
-    useEffect(() => {
-        const { index } = getBestBreakForQty(quantity);
-        setSelectedBreak(index);
-    }, [quantity, sortedBreaks.length]);
-
-    const currentPrice = calculatePrice(quantity);
-    const discountPercent = getDiscount(quantity);
-    const unitPrice = quantity > 0 ? currentPrice / quantity : 0;
 
     return (
         <div className="pricing-calculator">
@@ -98,11 +64,11 @@ const PricingCalculator = ({ product }: PricingCalculatorProps) => {
                 </div>
 
                 {/* Price Breaks */}
-                {sortedBreaks.length > 0 && (
+                {sortedBreaksMemo.length > 0 && (
                     <div className="price-breaks-section">
                         <h4 className="breaks-title p1-medium">Descuentos por volumen</h4>
                         <div className="price-breaks">
-                            {sortedBreaks.map((priceBreak, index) => {
+                            {sortedBreaksMemo.map((priceBreak, index) => {
                                 const isActive = quantity >= priceBreak.minQty;
                                 const isSelected = selectedBreak === index;
 
@@ -148,7 +114,7 @@ const PricingCalculator = ({ product }: PricingCalculatorProps) => {
 
                     <div className="summary-row total-row">
                         <span className="summary-label p1-medium">Total:</span>
-                        <span className="summary-value total-value h2">{formatPrice(currentPrice)}</span>
+                        <span className="summary-value total-value h2">{formatPrice(netSubtotal)}</span>
                     </div>
                 </div>
 
@@ -157,8 +123,13 @@ const PricingCalculator = ({ product }: PricingCalculatorProps) => {
                     <button
                         className="btn btn-secondary cta1"
                         onClick={() => {
-                            // Handle quote request
-                            alert(`Cotización solicitada para ${quantity} unidades de ${product.name}`);
+                            onOpenQuote?.({
+                                product,
+                                quantity,
+                                unitPrice,
+                                netSubtotal,
+                                discountPercent,
+                            });
                         }}
                     >
                         <span className="material-icons">email</span>
@@ -172,7 +143,7 @@ const PricingCalculator = ({ product }: PricingCalculatorProps) => {
                                 id: product.id,
                                 name: product.name,
                                 image: product.image,
-                                price: currentPrice,
+                                price: unitPrice, // unit price (not subtotal)
                                 sku: product.sku,
                                 qty: quantity,
                             });

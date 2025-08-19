@@ -5,6 +5,8 @@ import { Product } from "../types/Product";
 import PricingCalculator from "../components/PricingCalculator";
 import "./ProductDetail.css";
 import { addToCart } from "../data/cart";
+import QuoteModal from "../components/QuoteModal";
+import { getUnitPriceForQty } from "../data/pricing";
 
 const ProductDetail = () => {
     const { id } = useParams<{ id: string }>();
@@ -12,6 +14,12 @@ const ProductDetail = () => {
     const [selectedColor, setSelectedColor] = useState<string>("");
     const [selectedSize, setSelectedSize] = useState<string>("");
     const [quantity, setQuantity] = useState<number>(1);
+
+    // Quote modal state (controlled)
+    const [isOpen, setIsOpen] = useState<boolean>(false);
+    // Optional overrides when opening from PricingCalculator
+    const [quoteUnitPrice, setQuoteUnitPrice] = useState<number | undefined>(undefined);
+    const [quoteNetSubtotal, setQuoteNetSubtotal] = useState<number | undefined>(undefined);
 
     useEffect(() => {
         if (id) {
@@ -48,36 +56,28 @@ const ProductDetail = () => {
     // Validate product status
     const canAddToCart = product.status === "active" && product.stock > 0;
 
-    // Sort price breaks
-    const sortBreaks = (product: Product) => {
-        if (!product.priceBreaks || product.priceBreaks.length === 0) return [];
-        return [...product.priceBreaks].sort((a, b) => a.minQty - b.minQty);
+    // Open quote from this page (ProductDetail button)
+    const openQuoteFromDetail = () => {
+        // Clear overrides so the modal computes using its own logic
+        setQuoteUnitPrice(undefined);
+        setQuoteNetSubtotal(undefined);
+        setIsOpen(true);
     };
 
-    // Get best price break for quantity
-    const getBestBreakForQty = (product: Product, qty: number) => {
-        const sorted = sortBreaks(product);
-        if (sorted.length === 0) return { index: -1, priceBreak: null as any };
-
-        const eligible = sorted.map((b, i) => ({ ...b, __index: i })).filter((b) => qty >= b.minQty);
-
-        if (eligible.length === 0) return { index: -1, priceBreak: null as any };
-
-        const best = eligible.reduce((best, curr) => {
-            if (!best) return curr;
-            if (curr.price < best.price) return curr;
-            if (curr.price === best.price && curr.minQty > best.minQty) return curr;
-            return best;
-        }, null as any);
-
-        return { index: best.__index, priceBreak: best };
-    };
-
-    // Get unit price for quantity
-    const getUnitPriceForQty = (product: Product, qty: number) => {
-        const { priceBreak } = getBestBreakForQty(product, qty);
-        // guard-rail: nunca peor que basePrice
-        return priceBreak ? Math.min(priceBreak.price, product.basePrice) : product.basePrice;
+    // Open quote from PricingCalculator with calculated price
+    const openQuoteFromCalculator = (ctx: {
+        product: Product;
+        quantity: number;
+        unitPrice: number;
+        netSubtotal: number;
+        discountPercent: number;
+    }) => {
+        // Sync selected quantity with calculator's value
+        setQuantity(ctx.quantity);
+        // Set overrides so the modal shows exactly what calculator computed
+        setQuoteUnitPrice(ctx.unitPrice);
+        setQuoteNetSubtotal(ctx.netSubtotal);
+        setIsOpen(true);
     };
 
     return (
@@ -236,7 +236,10 @@ const ProductDetail = () => {
                                     {canAddToCart ? "Agregar al carrito" : "No disponible"}
                                 </button>
 
-                                <button className="btn btn-secondary cta1" onClick={() => alert("Función de cotización por implementar")}>
+                                <button
+                                    className="btn btn-secondary cta1"
+                                    onClick={openQuoteFromDetail} // open modal from Product Detail
+                                >
                                     <span className="material-icons">calculate</span>
                                     Solicitar cotización
                                 </button>
@@ -247,9 +250,22 @@ const ProductDetail = () => {
 
                 {/* Pricing Calculator */}
                 <div className="pricing-section">
-                    <PricingCalculator product={product} />
+                    <PricingCalculator
+                        product={product}
+                        // open modal using the exact values calculated in the calculator
+                        onOpenQuote={(ctx) => openQuoteFromCalculator(ctx)}
+                    />
                 </div>
             </div>
+            <QuoteModal
+                product={product}
+                quantity={quantity}
+                open={isOpen}
+                onClose={() => setIsOpen(false)}
+                /* Optional overrides when coming from PricingCalculator */
+                unitPriceOverride={quoteUnitPrice}
+                netSubtotalOverride={quoteNetSubtotal}
+            />
         </div>
     );
 };

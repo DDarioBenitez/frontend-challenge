@@ -4,6 +4,7 @@ import ProductFilters from "../components/ProductFilters";
 import { products as allProducts, categories } from "../data/products";
 import { Product } from "../types/Product";
 import "./ProductList.css";
+import QuoteModal from "../components/QuoteModal";
 
 const ProductList = () => {
     const [filteredProducts, setFilteredProducts] = useState<Product[]>(allProducts);
@@ -13,6 +14,11 @@ const ProductList = () => {
     const [sortBy, setSortBy] = useState("name");
     const [min, setMin] = useState<number | null>(null);
     const [max, setMax] = useState<number | null>(null);
+
+    //  Quote modal local state (page-scoped, not global)
+    const [quoteOpen, setQuoteOpen] = useState(false);
+    const [quoteProduct, setQuoteProduct] = useState<Product | null>(null);
+    const [quoteQty, setQuoteQty] = useState(1); // list context -> default 1
 
     // Helper: minimal unit price (base or best break)
     const productMinUnitPrice = (p: Product) => {
@@ -110,6 +116,14 @@ const ProductList = () => {
         setMax(null);
         filterProducts("all", "", defaultSort, null, null);
     };
+
+    // Open quote modal
+    const openQuoteFromCard = (p: Product) => {
+        setQuoteProduct(p);
+        setQuoteQty(1); // card has no qty selector; default to 1
+        setQuoteOpen(true);
+    };
+
     return (
         <div className="product-list-page">
             <div className="container">
@@ -166,12 +180,15 @@ const ProductList = () => {
                     ) : (
                         <div className="products-grid">
                             {filteredProducts.map((product) => (
-                                <ProductCard key={product.id} product={product} />
+                                <ProductCard key={product.id} product={product} onQuote={openQuoteFromCard} />
                             ))}
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Page-scoped Quote modal (only render when a product is selected) */}
+            {quoteProduct && <QuoteModal product={quoteProduct} quantity={quoteQty} open={quoteOpen} onClose={() => setQuoteOpen(false)} />}
         </div>
     );
 };

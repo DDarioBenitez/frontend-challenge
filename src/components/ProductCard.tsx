@@ -4,9 +4,10 @@ import "./ProductCard.css";
 
 interface ProductCardProps {
     product: Product;
+    onQuote?: (product: Product) => void; // Callback for quote action
 }
 
-const ProductCard = ({ product }: ProductCardProps) => {
+const ProductCard = ({ product, onQuote }: ProductCardProps) => {
     // Handle product status display
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -127,7 +128,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
                         className="btn btn-secondary l1"
                         onClick={(e) => {
                             e.preventDefault();
-                            alert("Función de cotización por implementar");
+                            onQuote?.(product);
                         }}
                     >
                         <span className="material-icons">calculate</span>
